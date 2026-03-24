@@ -21,12 +21,19 @@ function Show-Dashboard {
     # Load sessions
     $script:Sessions = Get-ClaudeSessions
     
+    Write-Host "Debug: Loaded $($script:Sessions.Count) session(s)" -ForegroundColor DarkGray
+    
     if ($script:Sessions.Count -eq 0) {
         Write-Host "  No active Claude Code sessions found." -ForegroundColor DarkGray
         Write-Host ""
         Write-Host "  Start a session with: claude" -ForegroundColor Yellow
         Write-Host ""
         return
+    }
+    
+    # Debug: print sessions
+    foreach ($s in $script:Sessions) {
+        Write-Host "Debug: Session id=$($s.id) name=$($s.name) dir=$($s.directory)" -ForegroundColor DarkGray
     }
     
     # Column widths
