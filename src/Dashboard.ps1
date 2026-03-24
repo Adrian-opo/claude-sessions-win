@@ -39,14 +39,39 @@ function Show-Dashboard {
         $session = $script:Sessions[$i]
         $isSelected = ($i -eq $script:SelectedIndex)
         
+        # Handle null values
+        $dirName = "unknown"
+        if ($session.directory) {
+            try {
+                $dirName = Split-Path $session.directory -Leaf
+            } catch {
+                $dirName = $session.directory
+            }
+        }
+        
+        $modelName = "unknown"
+        if ($session.model) {
+            $modelName = $session.model -replace "claude-", ""
+        }
+        
+        $contextStr = "0"
+        if ($session.contextTokens) {
+            $contextStr = Format-Number $session.contextTokens
+        }
+        
+        $lastStr = "--"
+        if ($session.lastActivity) {
+            $lastStr = Format-RelativeTime $session.lastActivity
+        }
+        
         $cells = @(
             ($i + 1).ToString()
             $session.name.PadRight(20).Substring(0, 20)
             $session.status.PadRight(12).Substring(0, 12)
-            (Split-Path $session.directory -Leaf).PadRight(25).Substring(0, 25)
-            ($session.model -replace "claude-", "").PadRight(10).Substring(0, 10)
-            (Format-Number $session.contextTokens).PadRight(15)
-            (Format-RelativeTime $session.lastActivity).PadRight(10)
+            $dirName.PadRight(25).Substring(0, 25)
+            $modelName.PadRight(10).Substring(0, 10)
+            $contextStr.PadRight(15)
+            $lastStr.PadRight(10)
         )
         
         $color = switch ($session.status) {
