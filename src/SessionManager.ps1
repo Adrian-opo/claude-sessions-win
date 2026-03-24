@@ -1,5 +1,5 @@
 # Session Manager for Claude Code on Windows
-# Reads session data from ~/.claude/sessions/
+# Reads session data from ~/.claude/sessions/ and ~/.claude/projects/
 
 function Get-ClaudeConfigPath {
     return "$env:USERPROFILE\.claude"
@@ -15,6 +15,7 @@ function Get-ProjectsPath {
 
 function Get-ClaudeSessions {
     $sessionsPath = Get-SessionsPath
+    $projectsPath = Get-ProjectsPath
     $sessions = @()
     
     if (!(Test-Path $sessionsPath)) {
@@ -30,33 +31,53 @@ function Get-ClaudeSessions {
             $process = Get-Process -Id $sessionData.pid -ErrorAction SilentlyContinue
             $isRunning = $null -ne $process
             
-            # Try to get project state for more info
-            $projectState = $null
+            # Initialize defaults
             $contextTokens = 0
             $lastActivity = $null
             $model = "unknown"
+            $status = "Idle"
             
-            if ($sessionData.projectPath) {
-                $projectHash = Get-ProjectHash -Path $sessionData.projectPath
-                $statePath = "$(Get-ProjectsPath)\$projectHash\state.json"
-                if (Test-Path $statePath) {
-                    $projectState = Get-Content $statePath -Raw | ConvertFrom-Json
-                    
-                    if ($projectState.contextTokens) {
-                        $contextTokens = $projectState.contextTokens
-                    }
-                    
-                    if ($projectState.model) {
-                        $model = $projectState.model
-                    }
-                    
-                    if ($projectState.lastMessageTime) {
-                        $lastActivity = $projectState.lastMessageTime
+            # Find project directory that contains this session
+            if ($sessionData.sessionId) {
+                $projectDirs = Get-ChildItem -Path $projectsPath -Directory
+                foreach ($projDir in $projectDirs) {
+                    $jsonlPath = Join-Path $projDir.FullName "$($sessionData.sessionId).jsonl"
+                    if (Test-Path $jsonlPath) {
+                        # Read the last few lines of the JSONL file
+                        $lastLines = Get-Content $jsonlPath -Tail 10
+                        foreach ($line in $lastLines) {
+                            try {
+                                $entry = $line | ConvertFrom-Json
+                                
+                                # Extract context tokens
+                                if ($entry.contextTokens -and $entry.contextTokens -gt $contextTokens) {
+                                    $contextTokens = $entry.contextTokens
+                                }
+                                
+                                # Extract model
+                                if ($entry.model) {
+                                    $model = $entry.model
+                                }
+                                
+                                # Extract timestamp
+                                if ($entry.timestamp) {
+                                    $lastActivity = $entry.timestamp
+                                }
+                                
+                                # Check for streaming/tool state
+                                if ($entry.type -eq "user" -or $entry.type -eq "assistant") {
+                                    $status = "Working"
+                                }
+                            } catch {
+                                # Skip invalid JSON lines
+                            }
+                        }
+                        break
                     }
                 }
             }
             
-            # If no project state, use startedAt as fallback
+            # If no activity found, use startedAt as fallback
             if (!$lastActivity -and $sessionData.startedAt) {
                 $lastActivity = (Get-Date -UnixTimeSeconds ($sessionData.startedAt / 1000)).ToString("o")
             }
@@ -67,8 +88,14 @@ function Get-ClaudeSessions {
                 $name = Split-Path $sessionData.cwd -Leaf
             }
             
-            # Determine status
-            $status = Get-SessionStatus -SessionData $sessionData -ProjectState $projectState -IsRunning $isRunning
+            # Determine final status
+            if (!$isRunning) {
+                $status = "Idle"
+            } elseif ($contextTokens -eq 0) {
+                $status = "New"
+            } elseif ($status -ne "Working") {
+                $status = "Idle"
+            }
             
             if ($isRunning) {
                 $sessions += [PSCustomObject]@{
@@ -78,7 +105,7 @@ function Get-ClaudeSessions {
                     directory = $sessionData.cwd
                     projectPath = $sessionData.projectPath
                     status = $status
-                    model = $model
+                    model = $model -replace "claude-", ""
                     contextTokens = $contextTokens
                     lastActivity = $lastActivity
                     createdAt = (Get-Date -UnixTimeSeconds ($sessionData.startedAt / 1000)).ToString("o")
@@ -106,30 +133,6 @@ function Get-SessionStatus {
     # Check if there's any activity
     if (!$SessionData.startedAt) {
         return "New"
-    }
-    
-    # If we have project state, check for pending approvals
-    if ($ProjectState) {
-        if ($ProjectState.pendingApproval -eq $true) {
-            return "Input"
-        }
-        
-        if ($ProjectState.isStreaming -eq $true -or $ProjectState.isToolRunning -eq $true) {
-            return "Working"
-        }
-        
-        if ($ProjectState.lastMessageTime) {
-            try {
-                $lastMsg = [DateTime]::Parse($ProjectState.lastMessageTime)
-                $timeSince = (Get-Date) - $lastMsg
-                
-                if ($timeSince.TotalMinutes -lt 2) {
-                    return "Working"
-                }
-            } catch {
-                # Ignore parse errors
-            }
-        }
     }
     
     # Check how long since session started
