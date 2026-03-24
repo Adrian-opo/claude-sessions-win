@@ -1,0 +1,19 @@
+# PowerShell
+*.psd1
+*.psm1
+*.pssc
+
+# Session data (don't commit Claude sessions)
+sessions/
+*.session.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
