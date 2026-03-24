@@ -13,6 +13,67 @@ function Get-ProjectsPath {
     return "$(Get-ClaudeConfigPath)\projects"
 }
 
+function Get-GitBranch {
+    param([string]$Directory)
+    
+    if (!$Directory -or !(Test-Path $Directory)) {
+        return $null
+    }
+    
+    $gitDir = Join-Path $Directory ".git"
+    if (!(Test-Path $gitDir)) {
+        # Try parent directories (max 3 levels)
+        $parent = Split-Path $Directory -Parent
+        if ($parent -ne $Directory) {
+            return Get-GitBranch -Directory $parent
+        }
+        return $null
+    }
+    
+    try {
+        $headFile = Join-Path $gitDir "HEAD"
+        if (Test-Path $headFile) {
+            $headContent = Get-Content $headFile -Raw
+            if ($headContent -match "ref: refs/heads/(.+)") {
+                return $matches[1]
+            }
+        }
+    } catch {
+        # Ignore git errors
+    }
+    
+    return $null
+}
+
+function Get-RepoName {
+    param([string]$Directory)
+    
+    if (!$Directory) {
+        return "unknown"
+    }
+    
+    # Try to get from git remote
+    try {
+        if (Test-Path $Directory) {
+            $gitDir = Join-Path $Directory ".git"
+            if (Test-Path $gitDir) {
+                $configFile = Join-Path $gitDir "config"
+                if (Test-Path $configFile) {
+                    $config = Get-Content $configFile -Raw
+                    if ($config -match "url = .+/(.+)\.git") {
+                        return $matches[1]
+                    }
+                }
+            }
+        }
+    } catch {
+        # Ignore
+    }
+    
+    # Fallback to directory name
+    return Split-Path $Directory -Leaf
+}
+
 function Get-ClaudeSessions {
     $sessionsPath = Get-SessionsPath
     $projectsPath = Get-ProjectsPath
@@ -40,9 +101,12 @@ function Get-ClaudeSessions {
             
             # Initialize defaults
             $contextTokens = 0
+            $maxContext = 200000  # Default Claude context window
             $lastActivity = $null
             $model = "unknown"
             $status = "Idle"
+            $branch = $null
+            $repoName = "unknown"
             
             # Find project directory that contains this session
             if ($sessionData.sessionId -and (Test-Path $projectsPath)) {
@@ -78,6 +142,12 @@ function Get-ClaudeSessions {
                         break
                     }
                 }
+            }
+            
+            # Get repo and branch info
+            if ($sessionData.cwd) {
+                $repoName = Get-RepoName -Directory $sessionData.cwd
+                $branch = Get-GitBranch -Directory $sessionData.cwd
             }
             
             # If no activity found, use startedAt as fallback
@@ -122,8 +192,11 @@ function Get-ClaudeSessions {
                     status = $status
                     model = $model -replace "claude-", ""
                     contextTokens = $contextTokens
+                    maxContext = $maxContext
                     lastActivity = $lastActivity
                     createdAt = $null
+                    repo = $repoName
+                    branch = $branch
                 }
                 
                 try {

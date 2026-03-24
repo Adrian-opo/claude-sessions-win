@@ -30,8 +30,8 @@ function Show-Dashboard {
     }
     
     # Column widths
-    $widths = @(4, 20, 12, 25, 10, 15, 10)
-    $columns = @("#", "Session", "Status", "Directory", "Model", "Context", "Last")
+    $widths = @(4, 18, 10, 22, 18, 10, 16, 10)
+    $columns = @("#", "Session", "Status", "Repo/Branch", "Model", "Context", "Last")
     
     Write-TableHeader -Columns $columns -Widths $widths
     
@@ -40,37 +40,38 @@ function Show-Dashboard {
         $isSelected = ($i -eq $script:SelectedIndex)
         
         # Handle null values
-        $dirName = "unknown"
-        if ($session.directory) {
-            try {
-                $dirName = Split-Path $session.directory -Leaf
-            } catch {
-                $dirName = $session.directory
+        $repoBranch = "—"
+        if ($session.repo) {
+            if ($session.branch) {
+                $repoBranch = "$($session.repo)::"$($session.branch)"
+            } else {
+                $repoBranch = $session.repo
             }
         }
         
         $modelName = "unknown"
         if ($session.model) {
-            $modelName = $session.model -replace "claude-", ""
+            $modelName = $session.model
         }
         
-        $contextStr = "0"
-        if ($session.contextTokens) {
-            $contextStr = Format-Number $session.contextTokens
+        # Context bar with tokens
+        $contextDisplay = ""
+        if ($session.contextTokens -gt 0) {
+            $contextBar = Format-ContextBar -Tokens $session.contextTokens -MaxTokens $session.maxContext -Width 12
+            $contextDisplay = "$($session.contextTokens / 1000)k/$($session.maxContext / 1000)k"
+        } else {
+            $contextDisplay = "—"
         }
         
-        $lastStr = "--"
-        if ($session.lastActivity) {
-            $lastStr = Format-RelativeTime $session.lastActivity
-        }
+        $lastStr = Format-RelativeTime $session.lastActivity
         
         $cells = @(
             ($i + 1).ToString()
-            $session.name.PadRight(20).Substring(0, 20)
-            $session.status.PadRight(12).Substring(0, 12)
-            $dirName.PadRight(25).Substring(0, 25)
-            $modelName.PadRight(10).Substring(0, 10)
-            $contextStr.PadRight(15)
+            $session.name.PadRight(18).Substring(0, 18)
+            $session.status.PadRight(10).Substring(0, 10)
+            $repoBranch.PadRight(22).Substring(0, 22)
+            $modelName.PadRight(18).Substring(0, 18)
+            $contextDisplay.PadRight(10)
             $lastStr.PadRight(10)
         )
         
@@ -109,6 +110,14 @@ function Show-Dashboard {
         }
         Write-Colored "  $($status.Name): $($status.Count)  " $color
     }
+    
+    # Total context usage
+    $totalTokens = ($script:Sessions | Measure-Object -Property contextTokens -Sum).Sum
+    $maxTokens = ($script:Sessions | Measure-Object -Property maxContext -Sum).Sum
+    if ($totalTokens -gt 0) {
+        Write-Colored "  |  Total: "$($totalTokens / 1000)k/$($maxTokens / 1000)k  " $DefaultColor
+    }
+    
     Write-Host ""
 }
 

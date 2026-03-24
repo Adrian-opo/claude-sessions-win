@@ -9,10 +9,10 @@ $Colors = @{
 }
 
 $StatusIcons = @{
-    Working = "*"
-    Input = "!"
-    Idle = "o"
-    New = "."
+    Working = "●"
+    Input = "●"
+    Idle = "○"
+    New = "◌"
 }
 
 function Write-Colored {
@@ -151,4 +151,49 @@ function Write-HelpText {
     param([string]$Text)
     
     Write-Host $Text -ForegroundColor DarkGray -NoNewline
+}
+
+function Format-ContextBar {
+    param(
+        [int]$Tokens,
+        [int]$MaxTokens,
+        [int]$Width = 15
+    )
+    
+    if ($MaxTokens -eq 0) {
+        return (" " * $Width)
+    }
+    
+    $percentage = [math]::Min(100, ($Tokens / $MaxTokens) * 100)
+    $filled = [math]::Max(1, [math]::Floor(($percentage / 100) * ($Width - 2)))
+    $empty = $Width - 2 - $filled
+    
+    # Determine color based on usage
+    $barColor = "Green"
+    if ($percentage -gt 80) {
+        $barColor = "Red"
+    } elseif ($percentage -gt 50) {
+        $barColor = "Yellow"
+    }
+    
+    $bar = "[" + ("█" * $filled) + ("░" * $empty) + "]"
+    
+    # Return with color info
+    return @{
+        Text = $bar
+        Percentage = $percentage
+        Color = $barColor
+    }
+}
+
+function Write-ContextBar {
+    param(
+        [int]$Tokens,
+        [int]$MaxTokens,
+        [int]$Width = 15
+    )
+    
+    $result = Format-ContextBar -Tokens $Tokens -MaxTokens $MaxTokens -Width $Width
+    
+    Write-Host $result.Text -ForegroundColor $result.Color -NoNewline
 }
