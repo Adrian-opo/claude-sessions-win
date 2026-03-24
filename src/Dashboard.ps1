@@ -164,6 +164,10 @@ function Handle-Input {
             82 { # r - refresh
                 Show-Dashboard
             }
+            86 { # v - tamagotchi view
+                & "$ScriptDir/src/Tamagotchi.ps1"
+                exit 0
+            }
             81 { # q - quit
                 Clear-Host
                 exit 0

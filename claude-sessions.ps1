@@ -18,6 +18,9 @@ $SuccessColor = [ConsoleColor]::Green
 
 switch ($Command) {
     "view" {
+        & "$ScriptDir/src/Tamagotchi.ps1"
+    }
+    "table" {
         & "$ScriptDir/src/Dashboard.ps1"
     }
     "json" {
@@ -67,7 +70,8 @@ Claude Sessions Manager for Windows
 Usage: .\claude-sessions.ps1 [command] [options]
 
 Commands:
-  view      Show dashboard (default)
+  view      Tamagotchi view (pixel art creatures)
+  table     Table dashboard (default)
   json      Output sessions as JSON
   new       Create new session
   resume    Resume existing session
