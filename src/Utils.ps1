@@ -9,10 +9,10 @@ $Colors = @{
 }
 
 $StatusIcons = @{
-    Working = "●"
-    Input = "●"
-    Idle = "○"
-    New = "◌"
+    Working = "*"
+    Input = "!"
+    Idle = "o"
+    New = "."
 }
 
 function Write-Colored {
@@ -38,7 +38,7 @@ function Format-RelativeTime {
     param([string]$Timestamp)
     
     if (!$Timestamp) {
-        return "—"
+        return "--"
     }
     
     try {
@@ -46,7 +46,7 @@ function Format-RelativeTime {
         $diff = (Get-Date) - $time
         
         if ($diff.TotalSeconds -lt 60) {
-            return "< 1m"
+            return "<1m"
         } elseif ($diff.TotalMinutes -lt 60) {
             return "$([math]::Floor($diff.TotalMinutes))m"
         } elseif ($diff.TotalHours -lt 24) {
@@ -71,10 +71,6 @@ function Format-Number {
     }
 }
 
-function Clear-Screen {
-    Clear-Host
-}
-
 function Get-ConsoleSize {
     $width = $Host.UI.RawUI.WindowSize.Width
     $height = $Host.UI.RawUI.WindowSize.Height
@@ -87,28 +83,32 @@ function Write-TableHeader {
         [int[]]$Widths
     )
     
-    $line = "+"
+    $PIPE = "|"
+    $DASH = "-"
+    $PLUS = "+"
+    
+    $line = $PLUS
     for ($i = 0; $i -lt $Columns.Count; $i++) {
-        $line += "-" * ($Widths[$i] + 2)
-        if ($i -lt $Columns.Count - 1) { $line += "+" }
+        $line += $DASH * ($Widths[$i] + 2)
+        if ($i -lt $Columns.Count - 1) { $line += $PLUS }
     }
-    $line += "+"
+    $line += $PLUS
     Write-Host $line -ForegroundColor DarkGray
     
-    $header = "|"
+    $header = $PIPE
     for ($i = 0; $i -lt $Columns.Count; $i++) {
         $header += " " + $Columns[$i].PadRight($Widths[$i]) + " "
-        if ($i -lt $Columns.Count - 1) { $header += "|" }
+        if ($i -lt $Columns.Count - 1) { $header += $PIPE }
     }
-    $header += "|"
+    $header += $PIPE
     Write-Host $header -ForegroundColor White
     
-    $line = "+"
+    $line = $PLUS
     for ($i = 0; $i -lt $Columns.Count; $i++) {
-        $line += "-" * ($Widths[$i] + 2)
-        if ($i -lt $Columns.Count - 1) { $line += "+" }
+        $line += $DASH * ($Widths[$i] + 2)
+        if ($i -lt $Columns.Count - 1) { $line += $PLUS }
     }
-    $line += "+"
+    $line += $PLUS
     Write-Host $line -ForegroundColor DarkGray
 }
 
@@ -119,12 +119,14 @@ function Write-TableRow {
         [ConsoleColor]$Color = $Colors.Default
     )
     
-    $row = "|"
+    $PIPE = "|"
+    
+    $row = $PIPE
     for ($i = 0; $i -lt $Cells.Count; $i++) {
         $row += " " + $Cells[$i].PadRight($Widths[$i]) + " "
-        if ($i -lt $Cells.Count - 1) { $row += "|" }
+        if ($i -lt $Cells.Count - 1) { $row += $PIPE }
     }
-    $row += "|"
+    $row += $PIPE
     Write-Host $row -ForegroundColor $Color
 }
 
@@ -133,12 +135,15 @@ function Write-TableFooter {
         [int[]]$Widths
     )
     
-    $line = "+"
+    $PLUS = "+"
+    $DASH = "-"
+    
+    $line = $PLUS
     for ($i = 0; $i -lt $Widths.Count; $i++) {
-        $line += "-" * ($Widths[$i] + 2)
-        if ($i -lt $Widths.Count - 1) { $line += "+" }
+        $line += $DASH * ($Widths[$i] + 2)
+        if ($i -lt $Widths.Count - 1) { $line += $PLUS }
     }
-    $line += "+"
+    $line += $PLUS
     Write-Host $line -ForegroundColor DarkGray
 }
 

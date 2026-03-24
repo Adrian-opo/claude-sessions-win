@@ -9,7 +9,7 @@ $script:SelectedIndex = 0
 $script:Sessions = @()
 
 function Show-Dashboard {
-    Clear-Screen
+    Clear-Host
     
     Write-Host ""
     Write-Host "  +========================================================+" -ForegroundColor Cyan
