@@ -18,34 +18,18 @@ function Get-ClaudeSessions {
     $projectsPath = Get-ProjectsPath
     $sessions = @()
     
-    Write-Host "Debug: Sessions path: $sessionsPath" -ForegroundColor DarkGray
-    Write-Host "Debug: Projects path: $projectsPath" -ForegroundColor DarkGray
-    
     if (!(Test-Path $sessionsPath)) {
-        Write-Host "Debug: Sessions path does not exist" -ForegroundColor DarkGray
         return $sessions
     }
     
     # Read all session JSON files
-    $sessionFiles = Get-ChildItem -Path $sessionsPath -Filter "*.json"
-    Write-Host "Debug: Found $($sessionFiles.Count) session file(s)" -ForegroundColor DarkGray
-    
-    foreach ($file in $sessionFiles) {
+    Get-ChildItem -Path $sessionsPath -Filter "*.json" | ForEach-Object {
         try {
-            Write-Host "Debug: Reading $($file.Name)" -ForegroundColor DarkGray
-            
-            $jsonContent = Get-Content $file.FullName -Raw
-            if (!$jsonContent) {
-                Write-Host "Debug: Empty file, skipping" -ForegroundColor DarkGray
-                continue
-            }
+            $jsonContent = Get-Content $_.FullName -Raw
+            if (!$jsonContent) { continue }
             
             $sessionData = $jsonContent | ConvertFrom-Json
-            
-            if (!$sessionData) {
-                Write-Host "Debug: Failed to parse JSON" -ForegroundColor DarkGray
-                continue
-            }
+            if (!$sessionData) { continue }
             
             # Get process info
             $process = $null
@@ -54,8 +38,6 @@ function Get-ClaudeSessions {
             }
             $isRunning = $null -ne $process
             
-            Write-Host "Debug: PID=$($sessionData.pid), Running=$isRunning" -ForegroundColor DarkGray
-            
             # Initialize defaults
             $contextTokens = 0
             $lastActivity = $null
@@ -63,47 +45,37 @@ function Get-ClaudeSessions {
             $status = "Idle"
             
             # Find project directory that contains this session
-            if ($sessionData.sessionId) {
-                Write-Host "Debug: SessionId=$($sessionData.sessionId)" -ForegroundColor DarkGray
-                
-                if (Test-Path $projectsPath) {
-                    $projectDirs = Get-ChildItem -Path $projectsPath -Directory -ErrorAction SilentlyContinue
-                    foreach ($projDir in $projectDirs) {
-                        $jsonlPath = Join-Path $projDir.FullName "$($sessionData.sessionId).jsonl"
-                        if (Test-Path $jsonlPath) {
-                            Write-Host "Debug: Found JSONL at $jsonlPath" -ForegroundColor DarkGray
-                            
-                            # Read the last few lines of the JSONL file
-                            $lastLines = Get-Content $jsonlPath -Tail 10 -ErrorAction SilentlyContinue
-                            foreach ($line in $lastLines) {
-                                try {
-                                    $entry = $line | ConvertFrom-Json
-                                    
-                                    # Extract context tokens
-                                    if ($entry.contextTokens -and $entry.contextTokens -gt $contextTokens) {
-                                        $contextTokens = $entry.contextTokens
-                                    }
-                                    
-                                    # Extract model
-                                    if ($entry.model) {
-                                        $model = $entry.model
-                                    }
-                                    
-                                    # Extract timestamp
-                                    if ($entry.timestamp) {
-                                        $lastActivity = $entry.timestamp
-                                    }
-                                    
-                                    # Check for streaming/tool state
-                                    if ($entry.type -eq "user" -or $entry.type -eq "assistant") {
-                                        $status = "Working"
-                                    }
-                                } catch {
-                                    # Skip invalid JSON lines
+            if ($sessionData.sessionId -and (Test-Path $projectsPath)) {
+                $projectDirs = Get-ChildItem -Path $projectsPath -Directory -ErrorAction SilentlyContinue
+                foreach ($projDir in $projectDirs) {
+                    $jsonlPath = Join-Path $projDir.FullName "$($sessionData.sessionId).jsonl"
+                    if (Test-Path $jsonlPath) {
+                        # Read the last few lines of the JSONL file
+                        $lastLines = Get-Content $jsonlPath -Tail 10 -ErrorAction SilentlyContinue
+                        foreach ($line in $lastLines) {
+                            try {
+                                $entry = $line | ConvertFrom-Json
+                                
+                                if ($entry.contextTokens -and $entry.contextTokens -gt $contextTokens) {
+                                    $contextTokens = $entry.contextTokens
                                 }
+                                
+                                if ($entry.model) {
+                                    $model = $entry.model
+                                }
+                                
+                                if ($entry.timestamp) {
+                                    $lastActivity = $entry.timestamp
+                                }
+                                
+                                if ($entry.type -eq "user" -or $entry.type -eq "assistant") {
+                                    $status = "Working"
+                                }
+                            } catch {
+                                # Skip invalid JSON lines
                             }
-                            break
                         }
+                        break
                     }
                 }
             }
@@ -114,7 +86,7 @@ function Get-ClaudeSessions {
                     $startTime = [DateTime]::UnixEpoch.AddMilliseconds($sessionData.startedAt)
                     $lastActivity = $startTime.ToString("o")
                 } catch {
-                    Write-Host "Debug: Failed to parse startedAt: $($sessionData.startedAt)" -ForegroundColor DarkGray
+                    # Ignore parse errors
                 }
             }
             
@@ -127,7 +99,7 @@ function Get-ClaudeSessions {
                 try {
                     $name = Split-Path $sessionData.cwd -Leaf
                 } catch {
-                    Write-Host "Debug: Failed to get directory name from $($sessionData.cwd)" -ForegroundColor DarkGray
+                    # Use sessionId as fallback
                 }
             }
             
@@ -139,8 +111,6 @@ function Get-ClaudeSessions {
             } elseif ($status -ne "Working") {
                 $status = "Idle"
             }
-            
-            Write-Host "Debug: Session: name=$name, status=$status, tokens=$contextTokens" -ForegroundColor DarkGray
             
             if ($isRunning) {
                 $sessions += [PSCustomObject]@{
@@ -165,8 +135,7 @@ function Get-ClaudeSessions {
                 }
             }
         } catch {
-            Write-Warning "Failed to read session $($file.Name): $_"
-            Write-Host "Debug: Error details: $($_.Exception.Message)" -ForegroundColor DarkGray
+            # Skip sessions that fail to parse
         }
     }
     
@@ -210,9 +179,14 @@ function Resume-ClaudeSession {
         return
     }
     
-    # Attach to the session (for now, just open the directory)
-    Set-Location $session.directory
-    Write-Host "Switched to session '$($session.name)' directory: $($session.directory)" -ForegroundColor Green
+    # Attach to the session (try to open the directory)
+    if ($session.directory -and (Test-Path $session.directory)) {
+        Set-Location $session.directory
+        Write-Host "Switched to session '$($session.name)' directory: $($session.directory)" -ForegroundColor Green
+    } else {
+        Write-Host "Session '$($session.name)' is running (PID $($session.pid))" -ForegroundColor Green
+        Write-Host "Directory not accessible: $($session.directory)" -ForegroundColor Yellow
+    }
     Write-Host "Claude Code should be running in PID $($session.pid)" -ForegroundColor Cyan
 }
 

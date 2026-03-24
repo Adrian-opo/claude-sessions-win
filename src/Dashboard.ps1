@@ -21,9 +21,6 @@ function Show-Dashboard {
     # Load sessions
     $script:Sessions = @(Get-ClaudeSessions)
     
-    Write-Host "Debug: Loaded $($script:Sessions.Count) session(s)" -ForegroundColor DarkGray
-    Write-Host "Debug: Sessions type = $($script:Sessions.GetType().FullName)" -ForegroundColor DarkGray
-    
     if ($script:Sessions.Count -eq 0) {
         Write-Host "  No active Claude Code sessions found." -ForegroundColor DarkGray
         Write-Host ""
@@ -32,21 +29,13 @@ function Show-Dashboard {
         return
     }
     
-    # Debug: print sessions
-    foreach ($s in $script:Sessions) {
-        Write-Host "Debug: Session id=$($s.id) name=$($s.name) dir=$($s.directory)" -ForegroundColor DarkGray
-    }
-    
     # Column widths
     $widths = @(4, 20, 12, 25, 10, 15, 10)
     $columns = @("#", "Session", "Status", "Directory", "Model", "Context", "Last")
     
     Write-TableHeader -Columns $columns -Widths $widths
     
-    Write-Host "Debug: About to iterate $($script:Sessions.Count) sessions" -ForegroundColor DarkGray
-    
     for ($i = 0; $i -lt $script:Sessions.Count; $i++) {
-        Write-Host "Debug: Iteration $i" -ForegroundColor DarkGray
         $session = $script:Sessions[$i]
         $isSelected = ($i -eq $script:SelectedIndex)
         
@@ -167,7 +156,7 @@ function Handle-Input {
                 Show-Dashboard
             }
             81 { # q - quit
-                Clear-Screen
+                Clear-Host
                 exit 0
             }
             38 { # Up arrow
