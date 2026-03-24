@@ -163,6 +163,3 @@ function Remove-ClaudeSession {
         Write-Host "Session '$($session.name)' terminated." -ForegroundColor Green
     }
 }
-
-# Export functions
-Export-ModuleMember -Function Get-ClaudeSessions, New-ClaudeSession, Resume-ClaudeSession, Remove-ClaudeSession

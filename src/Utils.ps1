@@ -87,28 +87,28 @@ function Write-TableHeader {
         [int[]]$Widths
     )
     
-    $line = "┌"
+    $line = "+"
     for ($i = 0; $i -lt $Columns.Count; $i++) {
-        $line += "─" * ($Widths[$i] + 2)
-        if ($i -lt $Columns.Count - 1) { $line += "┬" }
+        $line += "-" * ($Widths[$i] + 2)
+        if ($i -lt $Columns.Count - 1) { $line += "+" }
     }
-    $line += "┐"
+    $line += "+"
     Write-Host $line -ForegroundColor DarkGray
     
-    $header = "│"
+    $header = "|"
     for ($i = 0; $i -lt $Columns.Count; $i++) {
         $header += " " + $Columns[$i].PadRight($Widths[$i]) + " "
-        if ($i -lt $Columns.Count - 1) { $header += "│" }
+        if ($i -lt $Columns.Count - 1) { $header += "|" }
     }
-    $header += "│"
+    $header += "|"
     Write-Host $header -ForegroundColor White
     
-    $line = "├"
+    $line = "+"
     for ($i = 0; $i -lt $Columns.Count; $i++) {
-        $line += "─" * ($Widths[$i] + 2)
-        if ($i -lt $Columns.Count - 1) { $line += "┼" }
+        $line += "-" * ($Widths[$i] + 2)
+        if ($i -lt $Columns.Count - 1) { $line += "+" }
     }
-    $line += "┤"
+    $line += "+"
     Write-Host $line -ForegroundColor DarkGray
 }
 
@@ -119,12 +119,12 @@ function Write-TableRow {
         [ConsoleColor]$Color = $Colors.Default
     )
     
-    $row = "│"
+    $row = "|"
     for ($i = 0; $i -lt $Cells.Count; $i++) {
         $row += " " + $Cells[$i].PadRight($Widths[$i]) + " "
-        if ($i -lt $Cells.Count - 1) { $row += "│" }
+        if ($i -lt $Cells.Count - 1) { $row += "|" }
     }
-    $row += "│"
+    $row += "|"
     Write-Host $row -ForegroundColor $Color
 }
 
@@ -133,12 +133,12 @@ function Write-TableFooter {
         [int[]]$Widths
     )
     
-    $line = "└"
+    $line = "+"
     for ($i = 0; $i -lt $Widths.Count; $i++) {
-        $line += "─" * ($Widths[$i] + 2)
-        if ($i -lt $Widths.Count - 1) { $line += "┴" }
+        $line += "-" * ($Widths[$i] + 2)
+        if ($i -lt $Widths.Count - 1) { $line += "+" }
     }
-    $line += "┘"
+    $line += "+"
     Write-Host $line -ForegroundColor DarkGray
 }
 
@@ -147,6 +147,3 @@ function Write-HelpText {
     
     Write-Host $Text -ForegroundColor DarkGray -NoNewline
 }
-
-# Export functions
-Export-ModuleMember -Function Write-Colored, Write-Status, Format-RelativeTime, Format-Number, Clear-Screen, Get-ConsoleSize, Write-TableHeader, Write-TableRow, Write-TableFooter, Write-HelpText

@@ -12,10 +12,10 @@ function Show-Dashboard {
     Clear-Screen
     
     Write-Host ""
-    Write-Host "  ╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "  ║     Claude Sessions Manager for Windows                  ║" -ForegroundColor Cyan
-    Write-Host "  ║     Press 'q' to quit, 'r' to refresh                    ║" -ForegroundColor Cyan
-    Write-Host "  ╚══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "  +========================================================+" -ForegroundColor Cyan
+    Write-Host "  |     Claude Sessions Manager for Windows                |" -ForegroundColor Cyan
+    Write-Host "  |     Press 'q' to quit, 'r' to refresh                  |" -ForegroundColor Cyan
+    Write-Host "  +========================================================+" -ForegroundColor Cyan
     Write-Host ""
     
     # Load sessions
@@ -120,7 +120,7 @@ function Handle-Input {
             88 { # x - kill session
                 if ($script:Sessions.Count -gt 0) {
                     $session = $script:Sessions[$script:SelectedIndex]
-                    $confirm = Read-Host "Kill session '$($session.name)'? (y/n)"
+                    $confirm = Read-Host "Kill session '$($session.name)' (y/n)"
                     if ($confirm -eq "y") {
                         Remove-ClaudeSession -Id $session.id
                         Show-Dashboard
