@@ -26,30 +26,63 @@ function Get-ClaudeSessions {
         try {
             $sessionData = Get-Content $_.FullName -Raw | ConvertFrom-Json
             
+            # Get process info
+            $process = Get-Process -Id $sessionData.pid -ErrorAction SilentlyContinue
+            $isRunning = $null -ne $process
+            
             # Try to get project state for more info
             $projectState = $null
+            $contextTokens = 0
+            $lastActivity = $null
+            $model = "unknown"
+            
             if ($sessionData.projectPath) {
                 $projectHash = Get-ProjectHash -Path $sessionData.projectPath
                 $statePath = "$(Get-ProjectsPath)\$projectHash\state.json"
                 if (Test-Path $statePath) {
                     $projectState = Get-Content $statePath -Raw | ConvertFrom-Json
+                    
+                    if ($projectState.contextTokens) {
+                        $contextTokens = $projectState.contextTokens
+                    }
+                    
+                    if ($projectState.model) {
+                        $model = $projectState.model
+                    }
+                    
+                    if ($projectState.lastMessageTime) {
+                        $lastActivity = $projectState.lastMessageTime
+                    }
                 }
             }
             
-            # Determine status
-            $status = Get-SessionStatus -SessionData $sessionData -ProjectState $projectState
+            # If no project state, use startedAt as fallback
+            if (!$lastActivity -and $sessionData.startedAt) {
+                $lastActivity = (Get-Date -UnixTimeSeconds ($sessionData.startedAt / 1000)).ToString("o")
+            }
             
-            $sessions += [PSCustomObject]@{
-                id = $sessionData.sessionId
-                name = $sessionData.name
-                pid = $sessionData.pid
-                directory = $sessionData.cwd
-                projectPath = $sessionData.projectPath
-                status = $status
-                model = $sessionData.model
-                contextTokens = $sessionData.contextTokens
-                lastActivity = $sessionData.lastActivity
-                createdAt = $sessionData.createdAt
+            # Generate a name from the directory
+            $name = $sessionData.sessionId.Substring(0, 8)
+            if ($sessionData.cwd) {
+                $name = Split-Path $sessionData.cwd -Leaf
+            }
+            
+            # Determine status
+            $status = Get-SessionStatus -SessionData $sessionData -ProjectState $projectState -IsRunning $isRunning
+            
+            if ($isRunning) {
+                $sessions += [PSCustomObject]@{
+                    id = $sessionData.sessionId
+                    name = $name
+                    pid = $sessionData.pid
+                    directory = $sessionData.cwd
+                    projectPath = $sessionData.projectPath
+                    status = $status
+                    model = $model
+                    contextTokens = $contextTokens
+                    lastActivity = $lastActivity
+                    createdAt = (Get-Date -UnixTimeSeconds ($sessionData.startedAt / 1000)).ToString("o")
+                }
             }
         } catch {
             Write-Warning "Failed to read session $($_.Name): $_"
@@ -62,32 +95,53 @@ function Get-ClaudeSessions {
 function Get-SessionStatus {
     param(
         $SessionData,
-        $ProjectState
+        $ProjectState,
+        $IsRunning
     )
     
+    if (!$IsRunning) {
+        return "Idle"
+    }
+    
     # Check if there's any activity
-    if (!$SessionData.lastActivity -or $SessionData.contextTokens -eq 0) {
+    if (!$SessionData.startedAt) {
         return "New"
     }
     
     # If we have project state, check for pending approvals
     if ($ProjectState) {
-        if ($ProjectState.pendingApproval) {
+        if ($ProjectState.pendingApproval -eq $true) {
             return "Input"
         }
         
-        if ($ProjectState.isStreaming -or $ProjectState.isToolRunning) {
+        if ($ProjectState.isStreaming -eq $true -or $ProjectState.isToolRunning -eq $true) {
             return "Working"
         }
         
         if ($ProjectState.lastMessageTime) {
-            $lastMsg = [DateTime]::Parse($ProjectState.lastMessageTime)
-            $timeSince = (Get-Date) - $lastMsg
-            
-            if ($timeSince.TotalMinutes -lt 2) {
-                return "Working"
+            try {
+                $lastMsg = [DateTime]::Parse($ProjectState.lastMessageTime)
+                $timeSince = (Get-Date) - $lastMsg
+                
+                if ($timeSince.TotalMinutes -lt 2) {
+                    return "Working"
+                }
+            } catch {
+                # Ignore parse errors
             }
         }
+    }
+    
+    # Check how long since session started
+    try {
+        $started = Get-Date -UnixTimeSeconds ($SessionData.startedAt / 1000)
+        $timeSince = (Get-Date) - $started
+        
+        if ($timeSince.TotalMinutes -lt 1) {
+            return "New"
+        }
+    } catch {
+        # Ignore parse errors
     }
     
     # Default to Idle if nothing else matches
