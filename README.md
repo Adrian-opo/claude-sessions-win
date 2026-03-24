@@ -6,9 +6,12 @@ Dashboard nativo Windows para gerenciar sessões do Claude Code.
 
 - ✅ **Table Dashboard** - Veja todas as sessões ativas
 - ✅ **Status em Tempo Real** - Working, Input, Idle, New
+- ✅ **Git Branch Info** - Mostra repo::branch de cada sessão
+- ✅ **Context Bar** - Uso de tokens com cores (verde/amarelo/vermelho)
 - ✅ **Nativo Windows** - Sem WSL, sem tmux
 - ✅ **PowerShell TUI** - Interface no terminal
 - ✅ **Auto-detecção** - Encontra sessões automaticamente
+- 🚧 **Tamagotchi View** - Criaturas pixel art (em breve)
 
 ## Instalação
 
