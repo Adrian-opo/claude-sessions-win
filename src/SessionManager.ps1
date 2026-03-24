@@ -18,18 +18,43 @@ function Get-ClaudeSessions {
     $projectsPath = Get-ProjectsPath
     $sessions = @()
     
+    Write-Host "Debug: Sessions path: $sessionsPath" -ForegroundColor DarkGray
+    Write-Host "Debug: Projects path: $projectsPath" -ForegroundColor DarkGray
+    
     if (!(Test-Path $sessionsPath)) {
+        Write-Host "Debug: Sessions path does not exist" -ForegroundColor DarkGray
         return $sessions
     }
     
     # Read all session JSON files
-    Get-ChildItem -Path $sessionsPath -Filter "*.json" | ForEach-Object {
+    $sessionFiles = Get-ChildItem -Path $sessionsPath -Filter "*.json"
+    Write-Host "Debug: Found $($sessionFiles.Count) session file(s)" -ForegroundColor DarkGray
+    
+    foreach ($file in $sessionFiles) {
         try {
-            $sessionData = Get-Content $_.FullName -Raw | ConvertFrom-Json
+            Write-Host "Debug: Reading $($file.Name)" -ForegroundColor DarkGray
+            
+            $jsonContent = Get-Content $file.FullName -Raw
+            if (!$jsonContent) {
+                Write-Host "Debug: Empty file, skipping" -ForegroundColor DarkGray
+                continue
+            }
+            
+            $sessionData = $jsonContent | ConvertFrom-Json
+            
+            if (!$sessionData) {
+                Write-Host "Debug: Failed to parse JSON" -ForegroundColor DarkGray
+                continue
+            }
             
             # Get process info
-            $process = Get-Process -Id $sessionData.pid -ErrorAction SilentlyContinue
+            $process = $null
+            if ($sessionData.pid) {
+                $process = Get-Process -Id $sessionData.pid -ErrorAction SilentlyContinue
+            }
             $isRunning = $null -ne $process
+            
+            Write-Host "Debug: PID=$($sessionData.pid), Running=$isRunning" -ForegroundColor DarkGray
             
             # Initialize defaults
             $contextTokens = 0
@@ -39,54 +64,71 @@ function Get-ClaudeSessions {
             
             # Find project directory that contains this session
             if ($sessionData.sessionId) {
-                $projectDirs = Get-ChildItem -Path $projectsPath -Directory
-                foreach ($projDir in $projectDirs) {
-                    $jsonlPath = Join-Path $projDir.FullName "$($sessionData.sessionId).jsonl"
-                    if (Test-Path $jsonlPath) {
-                        # Read the last few lines of the JSONL file
-                        $lastLines = Get-Content $jsonlPath -Tail 10
-                        foreach ($line in $lastLines) {
-                            try {
-                                $entry = $line | ConvertFrom-Json
-                                
-                                # Extract context tokens
-                                if ($entry.contextTokens -and $entry.contextTokens -gt $contextTokens) {
-                                    $contextTokens = $entry.contextTokens
+                Write-Host "Debug: SessionId=$($sessionData.sessionId)" -ForegroundColor DarkGray
+                
+                if (Test-Path $projectsPath) {
+                    $projectDirs = Get-ChildItem -Path $projectsPath -Directory -ErrorAction SilentlyContinue
+                    foreach ($projDir in $projectDirs) {
+                        $jsonlPath = Join-Path $projDir.FullName "$($sessionData.sessionId).jsonl"
+                        if (Test-Path $jsonlPath) {
+                            Write-Host "Debug: Found JSONL at $jsonlPath" -ForegroundColor DarkGray
+                            
+                            # Read the last few lines of the JSONL file
+                            $lastLines = Get-Content $jsonlPath -Tail 10 -ErrorAction SilentlyContinue
+                            foreach ($line in $lastLines) {
+                                try {
+                                    $entry = $line | ConvertFrom-Json
+                                    
+                                    # Extract context tokens
+                                    if ($entry.contextTokens -and $entry.contextTokens -gt $contextTokens) {
+                                        $contextTokens = $entry.contextTokens
+                                    }
+                                    
+                                    # Extract model
+                                    if ($entry.model) {
+                                        $model = $entry.model
+                                    }
+                                    
+                                    # Extract timestamp
+                                    if ($entry.timestamp) {
+                                        $lastActivity = $entry.timestamp
+                                    }
+                                    
+                                    # Check for streaming/tool state
+                                    if ($entry.type -eq "user" -or $entry.type -eq "assistant") {
+                                        $status = "Working"
+                                    }
+                                } catch {
+                                    # Skip invalid JSON lines
                                 }
-                                
-                                # Extract model
-                                if ($entry.model) {
-                                    $model = $entry.model
-                                }
-                                
-                                # Extract timestamp
-                                if ($entry.timestamp) {
-                                    $lastActivity = $entry.timestamp
-                                }
-                                
-                                # Check for streaming/tool state
-                                if ($entry.type -eq "user" -or $entry.type -eq "assistant") {
-                                    $status = "Working"
-                                }
-                            } catch {
-                                # Skip invalid JSON lines
                             }
+                            break
                         }
-                        break
                     }
                 }
             }
             
             # If no activity found, use startedAt as fallback
             if (!$lastActivity -and $sessionData.startedAt) {
-                $startTime = [DateTime]::UnixEpoch.AddMilliseconds($sessionData.startedAt)
-                $lastActivity = $startTime.ToString("o")
+                try {
+                    $startTime = [DateTime]::UnixEpoch.AddMilliseconds($sessionData.startedAt)
+                    $lastActivity = $startTime.ToString("o")
+                } catch {
+                    Write-Host "Debug: Failed to parse startedAt: $($sessionData.startedAt)" -ForegroundColor DarkGray
+                }
             }
             
             # Generate a name from the directory
-            $name = $sessionData.sessionId.Substring(0, 8)
+            $name = "unknown"
+            if ($sessionData.sessionId) {
+                $name = $sessionData.sessionId.Substring(0, 8)
+            }
             if ($sessionData.cwd) {
-                $name = Split-Path $sessionData.cwd -Leaf
+                try {
+                    $name = Split-Path $sessionData.cwd -Leaf
+                } catch {
+                    Write-Host "Debug: Failed to get directory name from $($sessionData.cwd)" -ForegroundColor DarkGray
+                }
             }
             
             # Determine final status
@@ -97,6 +139,8 @@ function Get-ClaudeSessions {
             } elseif ($status -ne "Working") {
                 $status = "Idle"
             }
+            
+            Write-Host "Debug: Session: name=$name, status=$status, tokens=$contextTokens" -ForegroundColor DarkGray
             
             if ($isRunning) {
                 $sessions += [PSCustomObject]@{
@@ -109,56 +153,24 @@ function Get-ClaudeSessions {
                     model = $model -replace "claude-", ""
                     contextTokens = $contextTokens
                     lastActivity = $lastActivity
-                    createdAt = [DateTime]::UnixEpoch.AddMilliseconds($sessionData.startedAt).ToString("o")
+                    createdAt = $null
+                }
+                
+                try {
+                    if ($sessionData.startedAt) {
+                        $sessions[-1].createdAt = [DateTime]::UnixEpoch.AddMilliseconds($sessionData.startedAt).ToString("o")
+                    }
+                } catch {
+                    # Ignore
                 }
             }
         } catch {
-            Write-Warning "Failed to read session $($_.Name): $_"
+            Write-Warning "Failed to read session $($file.Name): $_"
+            Write-Host "Debug: Error details: $($_.Exception.Message)" -ForegroundColor DarkGray
         }
     }
     
     return $sessions
-}
-
-function Get-SessionStatus {
-    param(
-        $SessionData,
-        $ProjectState,
-        $IsRunning
-    )
-    
-    if (!$IsRunning) {
-        return "Idle"
-    }
-    
-    # Check if there's any activity
-    if (!$SessionData.startedAt) {
-        return "New"
-    }
-    
-    # Check how long since session started
-    try {
-        $started = [DateTime]::UnixEpoch.AddMilliseconds($SessionData.startedAt)
-        $timeSince = (Get-Date) - $started
-        
-        if ($timeSince.TotalMinutes -lt 1) {
-            return "New"
-        }
-    } catch {
-        # Ignore parse errors
-    }
-    
-    # Default to Idle if nothing else matches
-    return "Idle"
-}
-
-function Get-ProjectHash {
-    param([string]$Path)
-    
-    # Create a simple hash from the path
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($Path)
-    $hash = [System.Security.Cryptography.MD5]::Create().ComputeHash($bytes)
-    return [System.BitConverter]::ToString($hash).Replace("-", "").ToLower().Substring(0, 8)
 }
 
 function New-ClaudeSession {
