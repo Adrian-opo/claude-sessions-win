@@ -79,7 +79,8 @@ function Get-ClaudeSessions {
             
             # If no activity found, use startedAt as fallback
             if (!$lastActivity -and $sessionData.startedAt) {
-                $lastActivity = (Get-Date -UnixTimeSeconds ($sessionData.startedAt / 1000)).ToString("o")
+                $startTime = [DateTime]::UnixEpoch.AddMilliseconds($sessionData.startedAt)
+                $lastActivity = $startTime.ToString("o")
             }
             
             # Generate a name from the directory
@@ -108,7 +109,7 @@ function Get-ClaudeSessions {
                     model = $model -replace "claude-", ""
                     contextTokens = $contextTokens
                     lastActivity = $lastActivity
-                    createdAt = (Get-Date -UnixTimeSeconds ($sessionData.startedAt / 1000)).ToString("o")
+                    createdAt = [DateTime]::UnixEpoch.AddMilliseconds($sessionData.startedAt).ToString("o")
                 }
             }
         } catch {
@@ -137,7 +138,7 @@ function Get-SessionStatus {
     
     # Check how long since session started
     try {
-        $started = Get-Date -UnixTimeSeconds ($SessionData.startedAt / 1000)
+        $started = [DateTime]::UnixEpoch.AddMilliseconds($SessionData.startedAt)
         $timeSince = (Get-Date) - $started
         
         if ($timeSince.TotalMinutes -lt 1) {
